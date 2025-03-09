@@ -13,6 +13,7 @@ namespace BlobStorage.Controllers
         public HomeController(BlobServiceClient blobServiceClient, IConfiguration configuration)
         {
             _blobServiceClient = blobServiceClient;
+            //_containerName = configuration.GetConnectionString("ContainerName") ?? "defaultContainerName";
             _containerName = configuration.GetConnectionString("ContainerName") ?? "defaultContainerName";
         }
 
@@ -37,15 +38,25 @@ namespace BlobStorage.Controllers
             if (file == null || file.Length == 0)
                 return BadRequest("invalid file.");
 
+            try
+            {
+                var containerClient = _blobServiceClient.GetBlobContainerClient(_containerName);
+                await containerClient.CreateIfNotExistsAsync();
 
-            var containerClient = _blobServiceClient.GetBlobContainerClient(_containerName);
-            await containerClient.CreateIfNotExistsAsync();
+                var blobClient = containerClient.GetBlobClient(file.FileName);
+                using var stream = file.OpenReadStream();
+                await blobClient.UploadAsync(stream, true);
 
-            var blobClient = containerClient.GetBlobClient(file.FileName);
-            using var stream = file.OpenReadStream();
-            await blobClient.UploadAsync(stream, true);
-
-            return Ok(new { FileName = file.FileName, Url = blobClient.Uri.ToString() });
+                TempData["Message"] = "Upload Success";
+                TempData["MessageType"] = "success";
+                return RedirectToAction("Index"); 
+            }
+            catch 
+            {
+                TempData["Message"] = "Upload Error";
+                TempData["MessageType"] = "error";
+                return RedirectToAction("Index");
+            }
         }
 
         [HttpGet("download/{fileName}")]
@@ -55,7 +66,7 @@ namespace BlobStorage.Controllers
             var blobClient = containerClient.GetBlobClient(fileName);
 
             if (!await blobClient.ExistsAsync())
-                return NotFound("Arquivo não encontrado.");
+                return NotFound("File not found");
 
             var download = await blobClient.DownloadAsync();
             return File(download.Value.Content, download.Value.ContentType, fileName);
