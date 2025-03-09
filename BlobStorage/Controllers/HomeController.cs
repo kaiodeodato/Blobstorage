@@ -1,20 +1,21 @@
 using Azure.Storage.Blobs;
 using Microsoft.AspNetCore.Mvc;
 using Azure.Storage.Sas;
+using Microsoft.Extensions.Configuration;
 
 namespace BlobStorage.Controllers
 {
     public class HomeController : Controller
     {
         private readonly BlobServiceClient _blobServiceClient;
-        private readonly string _containerName = "containerblobs";
+        private readonly string _containerName;
 
-        public HomeController(BlobServiceClient blobServiceClient)
+        public HomeController(BlobServiceClient blobServiceClient, IConfiguration configuration)
         {
             _blobServiceClient = blobServiceClient;
+            _containerName = configuration.GetConnectionString("ContainerName") ?? "defaultContainerName";
         }
 
-        // Página inicial com upload, download e exclusão de arquivos
         public async Task<IActionResult> Index()
         {
             var containerClient = _blobServiceClient.GetBlobContainerClient(_containerName);
@@ -27,16 +28,15 @@ namespace BlobStorage.Controllers
                 files.Add(blobItem);
             }
 
-            // Altere para IEnumerable<BlobItem> para suportar o LINQ
             return View(files.AsEnumerable());
         }
 
-        // Upload de arquivo
         [HttpPost("upload")]
         public async Task<IActionResult> UploadFile([FromForm] IFormFile file)
         {
             if (file == null || file.Length == 0)
-                return BadRequest("Arquivo inválido.");
+                return BadRequest("invalid file.");
+
 
             var containerClient = _blobServiceClient.GetBlobContainerClient(_containerName);
             await containerClient.CreateIfNotExistsAsync();
@@ -48,7 +48,6 @@ namespace BlobStorage.Controllers
             return Ok(new { FileName = file.FileName, Url = blobClient.Uri.ToString() });
         }
 
-        // Download de arquivo
         [HttpGet("download/{fileName}")]
         public async Task<IActionResult> DownloadFile(string fileName)
         {
@@ -62,7 +61,6 @@ namespace BlobStorage.Controllers
             return File(download.Value.Content, download.Value.ContentType, fileName);
         }
 
-        // Excluir arquivo
         [HttpPost("delete/{fileName}")]
         public async Task<IActionResult> DeleteFile(string fileName)
         {
@@ -93,7 +91,6 @@ namespace BlobStorage.Controllers
             }
         }
 
-        // Gerar URL SAS para exibir miniatura
         public async Task<IActionResult> GenerateThumbnail(string fileName)
         {
             var containerClient = _blobServiceClient.GetBlobContainerClient(_containerName);
