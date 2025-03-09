@@ -1,0 +1,43 @@
+﻿@using Azure.Storage.Blobs.Models
+
+@{
+    ViewData["Title"] = "Home Page";
+}
+
+<h2>Upload de Arquivo</h2>
+<form asp-action="UploadFile" method="post" enctype="multipart/form-data">
+    <input type="file" name="file" />
+    <button type="submit">Upload</button>
+</form>
+
+<h2>Arquivos Disponíveis</h2>
+
+@if (Model != null && Model.Count > 0)
+{
+    <ul>
+        @foreach (var file in Model)
+        {
+            <li>
+                <img src="@Url.Action("GenerateThumbnail", new { fileName = file.Name })" alt="Miniatura" width="100" />
+
+                <span>@file.Name</span>
+
+                <a href="@Url.Action("DownloadFile", new { fileName = file.Name })">
+                    <i class="bi bi-download"></i> Baixar
+                </a>
+                <form asp-action="DeleteFile" asp-route-fileName="@file.Name" method="post" style="display:inline;">
+                    <button type="submit" style="background: none; border: none; color: red; cursor: pointer;">
+                        <i class="bi bi-trash"></i> Excluir
+                    </button>
+                </form>
+                <a href="@Url.Action("ShowImage", "Home", new { fileName = file.Name })" target="_blank">
+                    <i class="bi bi-eye"></i> Visualizar
+                </a>
+            </li>
+        }
+    </ul>
+}
+else
+{
+    <p>Não há arquivos disponíveis.</p>
+}
