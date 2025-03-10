@@ -42,6 +42,12 @@
                 <a href="@Url.Action("ShowImage", "Home", new { fileName = file.Name })" target="_blank">
                     <i class="bi bi-eye"></i> Visualizar
                 </a>
+
+                <form asp-action="EditName" method="post" style="display:inline;">
+                    <input type="hidden" name="fileName" value="@file.Name" />
+                    <input type="text" name="newFileName" placeholder="Novo nome">
+                    <button type="submit">Renomear</button>
+                </form>
             </li>
         }
     </ul>

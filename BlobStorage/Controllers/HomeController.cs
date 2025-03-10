@@ -2,6 +2,7 @@ using Azure.Storage.Blobs;
 using Microsoft.AspNetCore.Mvc;
 using Azure.Storage.Sas;
 using Microsoft.Extensions.Configuration;
+using Azure.Storage.Blobs.Models;
 
 namespace BlobStorage.Controllers
 {
@@ -13,7 +14,6 @@ namespace BlobStorage.Controllers
         public HomeController(BlobServiceClient blobServiceClient, IConfiguration configuration)
         {
             _blobServiceClient = blobServiceClient;
-            //_containerName = configuration.GetConnectionString("ContainerName") ?? "defaultContainerName";
             _containerName = configuration.GetConnectionString("ContainerName") ?? "defaultContainerName";
         }
 
@@ -112,20 +112,17 @@ namespace BlobStorage.Controllers
                 return NotFound("Arquivo não encontrado.");
             }
 
-            // Defina as permissões para a SAS (somente leitura)
             var sasBuilder = new BlobSasBuilder
             {
                 BlobContainerName = _containerName,
                 BlobName = fileName,
-                ExpiresOn = DateTimeOffset.UtcNow.AddHours(1) // Defina o tempo de expiração do SAS token
+                ExpiresOn = DateTimeOffset.UtcNow.AddHours(1)
             };
             sasBuilder.SetPermissions(BlobSasPermissions.Read);
 
-            // Gere a URL SAS
             var sasUri = blobClient.GenerateSasUri(sasBuilder);
 
-            // Retorne a URL da miniatura com a SAS token
-            return Redirect(sasUri.ToString()); // Você pode ajustar o retorno conforme necessário
+            return Redirect(sasUri.ToString());
         }
 
         [HttpGet("show/{fileName}")]
@@ -137,21 +134,63 @@ namespace BlobStorage.Controllers
             if (!await blobClient.ExistsAsync())
                 return NotFound("Imagem não encontrada.");
 
-            // Gerar uma URL com SAS Token se o container for privado
             var sasBuilder = new BlobSasBuilder
             {
                 BlobContainerName = _containerName,
                 BlobName = fileName,
-                ExpiresOn = DateTimeOffset.UtcNow.AddHours(1) // URL expira em 1 hora
+                ExpiresOn = DateTimeOffset.UtcNow.AddHours(1) 
             };
             sasBuilder.SetPermissions(BlobSasPermissions.Read);
 
             var sasUri = blobClient.GenerateSasUri(sasBuilder);
 
-            // Retorna uma página HTML para exibir a imagem
-            return Content($"<html><body><img src='{sasUri}' style='max-width:100%;'/></body></html>", "text/html");
+            return Content($"<html><body><img src='{sasUri}' style='max-height:100%;'/></body></html>", "text/html");
         }
 
+        [HttpPost("edit")]
+        public async Task<IActionResult> EditName(string fileName, string newFileName)
+        {
+            try
+            {
+                var containerClient = _blobServiceClient.GetBlobContainerClient(_containerName);
+                var sourceBlobClient = containerClient.GetBlobClient(fileName);
+                var destinationBlobClient = containerClient.GetBlobClient(newFileName);
 
+                // Verifica se o arquivo original existe
+                if (!await sourceBlobClient.ExistsAsync())
+                {
+                    TempData["Message"] = $"Arquivo '{fileName}' não encontrado.";
+                    return RedirectToAction("Index");
+                }
+
+                // Copia o arquivo para um novo blob
+                await destinationBlobClient.StartCopyFromUriAsync(sourceBlobClient.Uri);
+
+                // Aguarda a cópia ser concluída
+                BlobProperties properties;
+                do
+                {
+                    await Task.Delay(500);
+                    properties = await destinationBlobClient.GetPropertiesAsync();
+                } while (properties.CopyStatus == CopyStatus.Pending);
+
+                if (properties.CopyStatus != CopyStatus.Success)
+                {
+                    TempData["Message"] = $"Erro ao copiar o arquivo '{fileName}'.";
+                    return RedirectToAction("Index");
+                }
+
+                // Exclui o arquivo original
+                await sourceBlobClient.DeleteIfExistsAsync();
+
+                TempData["Message"] = $"Arquivo '{fileName}' renomeado para '{newFileName}' com sucesso!";
+            }
+            catch (Exception ex)
+            {
+                TempData["Message"] = $"Erro ao renomear o arquivo: {ex.Message}";
+            }
+
+            return RedirectToAction("Index");
+        }
     }
 }
