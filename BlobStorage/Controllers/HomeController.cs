@@ -6,6 +6,9 @@ using Azure.Storage.Blobs.Models;
 
 namespace BlobStorage.Controllers
 {
+    [ApiController]
+    [Route("api/v{version:apiVersion}/[controller]")]
+    [ApiVersion("1.0")]
     public class HomeController : Controller
     {
         private readonly BlobServiceClient _blobServiceClient;
@@ -102,6 +105,7 @@ namespace BlobStorage.Controllers
             }
         }
 
+        [HttpGet("generate-thumbnail/{fileName}")]
         public async Task<IActionResult> GenerateThumbnail(string fileName)
         {
             var containerClient = _blobServiceClient.GetBlobContainerClient(_containerName);
@@ -124,6 +128,7 @@ namespace BlobStorage.Controllers
 
             return Redirect(sasUri.ToString());
         }
+
 
         [HttpGet("show/{fileName}")]
         public async Task<IActionResult> ShowImage(string fileName)
@@ -148,7 +153,7 @@ namespace BlobStorage.Controllers
         }
 
         [HttpPost("edit")]
-        public async Task<IActionResult> EditName(string fileName, string newFileName)
+        public async Task<IActionResult> EditName([FromForm] string fileName, [FromForm] string newFileName)
         {
             try
             {
@@ -192,5 +197,7 @@ namespace BlobStorage.Controllers
 
             return RedirectToAction("Index");
         }
+
+
     }
 }

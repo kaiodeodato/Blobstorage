@@ -1,4 +1,6 @@
 using Azure.Storage.Blobs;
+using Microsoft.AspNetCore.Mvc.Versioning;
+using Microsoft.AspNetCore.Mvc;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -8,6 +10,15 @@ builder.Services.AddSingleton(x =>
     var connectionString = builder.Configuration.GetConnectionString("AzureBlobStorage");
     return new BlobServiceClient(connectionString);
 });
+builder.Services.AddApiVersioning(options =>
+{
+    options.ReportApiVersions = true;
+    options.AssumeDefaultVersionWhenUnspecified = true;
+    options.DefaultApiVersion = new ApiVersion(1, 0);
+    options.ApiVersionReader = new UrlSegmentApiVersionReader();
+});
+
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -24,6 +35,8 @@ app.UseStaticFiles();
 app.UseRouting();
 
 app.UseAuthorization();
+
+app.MapGet("/", () => Results.Redirect("/api/v1.0/Home/"));
 
 app.MapControllerRoute(
     name: "default",
