@@ -4,13 +4,36 @@
     ViewData["Title"] = "Home Page";
     var message = TempData["Message"];
     var messageType = TempData["MessageType"];
+    var toastMessage = TempData["ToastMessage"] as string;
+    var toastColor = TempData["ToastColor"] as string ?? "info";
+    var displayModeList = (TempData["displayModeList"] as bool?) ?? true;
+    TempData.Keep("displayModeList");
+}
+@if (!string.IsNullOrEmpty(toastMessage))
+{
+<div id="toast" class="toast" role="alert" aria-live="assertive" aria-atomic="true"
+     style="position: fixed; top: 20px; right: 20px; z-index: 1050;opacity:0.9;">
+    <div class="toast-header @($"bg-{toastColor}")">
+        <strong class="mr-auto" style="color:white;">Notificação</strong>
+        <button style="color:white;opacity:1;" type="button" class="ml-2 mb-1 close" aria-label="Close">
+            <span  aria-hidden="true">&times;</span>
+        </button>
+    </div>
+    <div class="toast-body">
+        @toastMessage
+    </div>
+</div>
 }
 
-<h2>Upload de Arquivo</h2>
-<form asp-action="UploadFile" method="post" enctype="multipart/form-data">
-    <input type="file" name="file" />
-    <button type="submit">Upload</button>
-</form>
+<div class="mb-4">
+    <h2 class="text-white col-12 text-center mb-4">Upload de Arquivo</h2>
+    <form asp-action="UploadFile" method="post" enctype="multipart/form-data" class="d-flex justify-content-around align-items-center">
+        <!-- Limitar largura, mas deixar 100% na tela pequena -->
+        <input type="file" name="file" class="form-control" style="max-width: 400px; width: 100%;" />
+        <input type="text" name="description" placeholder="Descrição do arquivo" class="form-control" style="max-width: 400px; width: 100%;" />
+        <button type="submit" class="btn btn-primary w-25">Upload</button>
+    </form>
+</div>
 
 @if (message != null)
 {
@@ -19,40 +42,119 @@
     </div>
 }
 
-<h2>Arquivos Disponíveis</h2>
+<h2 class="text-white  text-center">Arquivos Disponíveis</h2>
 
-@if (Model != null && Model.Count > 0)
+@if (Model is not null && Model.Count > 0)
 {
-    <ul>
-        @foreach (var file in Model)
-        {
-            <li>
-                <img src="@Url.Action("GenerateThumbnail", new { fileName = file.Name })" alt="Miniatura" width="100" />
+    @if (displayModeList)
+    {
+        <div class="row g-3">
+            @if (Model is not null )
+            {
+                @foreach (var file in Model)
+                {
+                    <div class="col-12 col-sm-6 col-md-4 col-lg-3">
+                        <div class="card">
+                            <img src="@Url.Action("GenerateThumbnail", new { fileName = file.Name })" class="card-img-top img-fluid" alt="Miniatura" style="height: 200px; object-fit: cover; object-position: top;">
+                            <div class="card-body" style="padding: 4px;">
+                                <h5 class="card-title">
+                                    <form asp-action="EditName" method="post" class="d-flex align-items-center">
+                                        <input type="hidden" name="fileName" value="@file.Name" />
+                                        <input type="text" name="newFileName" class="form-control border-0 placeholder-black" style="padding: 1px 4px; margin-left:2px;" placeholder="@file.Name" required />
+                                        <button type="submit" class="btn btn-secondary ms-2 btn-sm">
+                                            <i class="bi bi-pencil fs-7"></i>
+                                        </button>
+                                    </form>
+                                </h5>
 
-                <span>@file.Name</span>
+                                <span class="card-text">
+                                    <form asp-action="EditDescription" method="post" class="d-flex align-items-center">
+                                        <input type="hidden" name="fileName" value="@file.Name" />
+                                        <textarea name="newDescription" class="form-control border-0" rows="3" style="font-size: 12px;padding: 1px 4px; margin-left:2px;margin-right:8px;" required>@file.Description</textarea>
+                                        <button type="submit" class="btn btn-secondary ms-auto btn-sm">
+                                            <i class="bi bi-pencil fs-7"></i>
+                                        </button>
+                                    </form>
+                                </span>
 
-                <a href="@Url.Action("DownloadFile", new { fileName = file.Name })">
-                    <i class="bi bi-download"></i> Baixar
-                </a>
-                <form asp-action="DeleteFile" asp-route-fileName="@file.Name" method="post" style="display:inline;">
-                    <button type="submit" style="background: none; border: none; color: red; cursor: pointer;">
-                        <i class="bi bi-trash"></i> Excluir
-                    </button>
-                </form>
-                <a href="@Url.Action("ShowImage", "Home", new { fileName = file.Name })" target="_blank">
-                    <i class="bi bi-eye"></i> Visualizar
-                </a>
-
-                <form asp-action="EditName" method="post" style="display:inline;">
-                    <input type="hidden" name="fileName" value="@file.Name" />
-                    <input type="text" name="newFileName" placeholder="Novo nome">
-                    <button type="submit">Renomear</button>
-                </form>
-            </li>
-        }
-    </ul>
+                                <div class="d-flex justify-content-end mt-2">
+                                    <a href="@Url.Action("DownloadFile", new { fileName = file.Name })">
+                                        <i class="bi bi-download"></i>
+                                    </a>
+                                    <form asp-action="DeleteFile" asp-route-fileName="@file.Name" method="post" style="display:inline;">
+                                        <button type="submit" style="background: none; border: none; color: red; cursor: pointer;">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                    <a href="@Url.Action("ShowImage", "Home", new { fileName = file.Name })" target="_blank">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr class="text-white">
+                    <th scope="col" style="width: 25%;">Name</th>
+                    <th scope="col">Description</th>
+                    <th scope="col" style="width: 8%;">Options</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (Model is not null)
+                {
+                    @foreach (var file in Model)
+                    {
+                        <tr class="text-white">
+                            <td>
+                                <form asp-action="EditName" method="post" class="d-flex align-items-center" >
+                                    <input type="hidden" name="fileName" value="@file.Name" />
+                                    <input type="text" name="newFileName" class="form-control border-0 placeholder-black" style="padding: 1px 4px; margin-left:2px;" placeholder="@file.Name" required />
+                                    <button type="submit" class="btn btn-secondary ms-2 btn-sm">
+                                        <i class="bi bi-pencil fs-7"></i>
+                                    </button>
+                                </form>
+                            </td>
+                            <td>
+                                <form asp-action="EditDescription" method="post" class="d-flex align-items-center">
+                                    <input type="hidden" name="fileName" value="@file.Name" />
+                                    <textarea name="newDescription" class="form-control border-0" rows="2" style="font-size: 12px;padding: 1px 4px; margin-left:2px;margin-right:8px;" required>@file.Description</textarea>
+                                    <button type="submit" class="btn btn-secondary ms-auto btn-sm">
+                                        <i class="bi bi-pencil fs-7"></i>
+                                    </button>
+                                </form>
+                            </td>
+                            <td>
+                                <div class="d-flex justify-content-center">
+                                    <a href="@Url.Action("DownloadFile", new { fileName = file.Name })">
+                                        <i class="bi bi-download"></i>
+                                    </a>
+                                    <form asp-action="DeleteFile" asp-route-fileName="@file.Name" method="post" style="display:inline;">
+                                        <button type="submit" style="background: none; border: none; color: red; cursor: pointer;">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                    <a href="@Url.Action("ShowImage", "Home", new { fileName = file.Name })" target="_blank">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    }
 }
 else
 {
     <p>Não há arquivos disponíveis.</p>
 }
+

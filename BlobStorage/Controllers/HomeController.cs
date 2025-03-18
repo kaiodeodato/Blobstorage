@@ -1,8 +1,9 @@
-using Azure.Storage.Blobs;
 using Microsoft.AspNetCore.Mvc;
 using Azure.Storage.Sas;
-using Microsoft.Extensions.Configuration;
 using Azure.Storage.Blobs.Models;
+using BlobStorage.Services;
+using BlobStorage.Models;
+using BlobStorage.Helpers;
 
 namespace BlobStorage.Controllers
 {
@@ -11,62 +12,84 @@ namespace BlobStorage.Controllers
     [ApiVersion("1.0")]
     public class HomeController : Controller
     {
-        private readonly BlobServiceClient _blobServiceClient;
+        private readonly IBlobStorageClientFactory _blobStorageClientFactory;
         private readonly string _containerName;
 
-        public HomeController(BlobServiceClient blobServiceClient, IConfiguration configuration)
+
+        public HomeController(IBlobStorageClientFactory blobStorageClientFactory, IConfiguration configuration)
         {
-            _blobServiceClient = blobServiceClient;
+            _blobStorageClientFactory = blobStorageClientFactory;
             _containerName = configuration.GetConnectionString("ContainerName") ?? "defaultContainerName";
         }
 
         public async Task<IActionResult> Index()
         {
-            var containerClient = _blobServiceClient.GetBlobContainerClient(_containerName);
-            var blobItems = containerClient.GetBlobsAsync();
+            var blobContainerClient = _blobStorageClientFactory.CreateBlobContainerClient();
+            var blobItems = blobContainerClient.GetBlobsAsync();
 
-            var files = new List<Azure.Storage.Blobs.Models.BlobItem>();
+            var files = new List<BlobItemWithMetadata>();
 
             await foreach (var blobItem in blobItems)
             {
-                files.Add(blobItem);
+                var blobClient = blobContainerClient.GetBlobClient(blobItem.Name);
+
+                var properties = await blobClient.GetPropertiesAsync();
+                var metadata = properties.Value.Metadata;
+
+                var description = metadata.ContainsKey("Description") ? metadata["Description"] : "Sem descrição";
+
+                var fileWithMetadata = new BlobItemWithMetadata
+                {
+                    Name = blobItem.Name,
+                    Description = description
+                };
+
+                files.Add(fileWithMetadata);
             }
 
             return View(files.AsEnumerable());
         }
 
         [HttpPost("upload")]
-        public async Task<IActionResult> UploadFile([FromForm] IFormFile file)
+        public async Task<IActionResult> UploadFile([FromForm] IFormFile file, [FromForm] string description)
         {
             if (file == null || file.Length == 0)
                 return BadRequest("invalid file.");
 
             try
             {
-                var containerClient = _blobServiceClient.GetBlobContainerClient(_containerName);
-                await containerClient.CreateIfNotExistsAsync();
+                var blobContainerClient = _blobStorageClientFactory.CreateBlobContainerClient();
+                await blobContainerClient.CreateIfNotExistsAsync();
 
-                var blobClient = containerClient.GetBlobClient(file.FileName);
+                var blobClient = blobContainerClient.GetBlobClient(file.FileName);
                 using var stream = file.OpenReadStream();
                 await blobClient.UploadAsync(stream, true);
 
-                TempData["Message"] = "Upload Success";
-                TempData["MessageType"] = "success";
-                return RedirectToAction("Index"); 
+                var metadata = new Dictionary<string, string>
+                {
+                    { "Description", description }
+                };
+                await blobClient.SetMetadataAsync(metadata);
+
+                TempData["ToastMessage"] = "Upload Success";
+                TempData["ToastColor"] = "success";
+                return RedirectToAction("Index");
             }
-            catch 
+            catch
             {
-                TempData["Message"] = "Upload Error";
-                TempData["MessageType"] = "error";
+                TempData["ToastMessage"] = "Upload Error";
+                TempData["ToastColor"] = "danger";
                 return RedirectToAction("Index");
             }
         }
 
+
         [HttpGet("download/{fileName}")]
         public async Task<IActionResult> DownloadFile(string fileName)
         {
-            var containerClient = _blobServiceClient.GetBlobContainerClient(_containerName);
-            var blobClient = containerClient.GetBlobClient(fileName);
+            var blobContainerClient = _blobStorageClientFactory.CreateBlobContainerClient();
+
+            var blobClient = blobContainerClient.GetBlobClient(fileName);
 
             if (!await blobClient.ExistsAsync())
                 return NotFound("File not found");
@@ -80,8 +103,10 @@ namespace BlobStorage.Controllers
         {
             try
             {
-                var containerClient = _blobServiceClient.GetBlobContainerClient(_containerName);
-                var blobClient = containerClient.GetBlobClient(fileName);
+                var blobContainerClient = _blobStorageClientFactory.CreateBlobContainerClient();
+
+
+                var blobClient = blobContainerClient.GetBlobClient(fileName);
 
                 Console.WriteLine($"Tentando deletar: {fileName}");
 
@@ -89,18 +114,21 @@ namespace BlobStorage.Controllers
 
                 if (response)
                 {
-                    TempData["Message"] = $"Arquivo '{fileName}' excluído com sucesso!";
+                    TempData["ToastMessage"] = $"Arquivo '{fileName}' excluído com sucesso!";
+                    TempData["ToastColor"] = "success";
                 }
                 else
                 {
-                    TempData["Message"] = $"Arquivo '{fileName}' não encontrado.";
+                    TempData["ToastMessage"] = $"Arquivo '{fileName}' não encontrado.";
+                    TempData["ToastColor"] = "danger";
                 }
 
                 return RedirectToAction("Index");
             }
             catch (Exception ex)
             {
-                TempData["Message"] = $"Erro ao excluir o arquivo: {ex.Message}";
+                TempData["ToastMessage"] = $"Erro ao excluir o arquivo: {ex.Message}";
+                TempData["ToastColor"] = "danger";
                 return RedirectToAction("Index");
             }
         }
@@ -108,8 +136,9 @@ namespace BlobStorage.Controllers
         [HttpGet("generate-thumbnail/{fileName}")]
         public async Task<IActionResult> GenerateThumbnail(string fileName)
         {
-            var containerClient = _blobServiceClient.GetBlobContainerClient(_containerName);
-            var blobClient = containerClient.GetBlobClient(fileName);
+            var blobContainerClient = _blobStorageClientFactory.CreateBlobContainerClient();
+
+            var blobClient = blobContainerClient.GetBlobClient(fileName);
 
             if (!await blobClient.ExistsAsync())
             {
@@ -133,8 +162,9 @@ namespace BlobStorage.Controllers
         [HttpGet("show/{fileName}")]
         public async Task<IActionResult> ShowImage(string fileName)
         {
-            var containerClient = _blobServiceClient.GetBlobContainerClient(_containerName);
-            var blobClient = containerClient.GetBlobClient(fileName);
+            var blobContainerClient = _blobStorageClientFactory.CreateBlobContainerClient();
+
+            var blobClient = blobContainerClient.GetBlobClient(fileName);
 
             if (!await blobClient.ExistsAsync())
                 return NotFound("Imagem não encontrada.");
@@ -157,21 +187,44 @@ namespace BlobStorage.Controllers
         {
             try
             {
-                var containerClient = _blobServiceClient.GetBlobContainerClient(_containerName);
-                var sourceBlobClient = containerClient.GetBlobClient(fileName);
-                var destinationBlobClient = containerClient.GetBlobClient(newFileName);
+                if (fileName.Equals(newFileName, StringComparison.OrdinalIgnoreCase))
+                {
+                    TempData["ToastMessage"] = "O nome do arquivo já é o mesmo.";
+                    TempData["ToastColor"] = "danger";
+                    return RedirectToAction("Index");
+                }
 
-                // Verifica se o arquivo original existe
+                var blobContainerClient = _blobStorageClientFactory.CreateBlobContainerClient();
+
+                // Verificar se já existe um arquivo com o novo nome
+                var blobExists = false;
+                await foreach (var blobItem in blobContainerClient.GetBlobsAsync())
+                {
+                    if (blobItem.Name.Equals(newFileName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        blobExists = true;
+                        break;
+                    }
+                }
+
+                if (blobExists)
+                {
+                    TempData["ToastMessage"] = $"Já existe um arquivo com o nome '{newFileName}'. Escolha outro nome.";
+                    TempData["ToastColor"] = "danger";
+                    return RedirectToAction("Index");
+                }
+
+                var sourceBlobClient = blobContainerClient.GetBlobClient(fileName);
+                var destinationBlobClient = blobContainerClient.GetBlobClient(newFileName);
+
                 if (!await sourceBlobClient.ExistsAsync())
                 {
                     TempData["Message"] = $"Arquivo '{fileName}' não encontrado.";
                     return RedirectToAction("Index");
                 }
 
-                // Copia o arquivo para um novo blob
                 await destinationBlobClient.StartCopyFromUriAsync(sourceBlobClient.Uri);
 
-                // Aguarda a cópia ser concluída
                 BlobProperties properties;
                 do
                 {
@@ -185,10 +238,10 @@ namespace BlobStorage.Controllers
                     return RedirectToAction("Index");
                 }
 
-                // Exclui o arquivo original
                 await sourceBlobClient.DeleteIfExistsAsync();
 
-                TempData["Message"] = $"Arquivo '{fileName}' renomeado para '{newFileName}' com sucesso!";
+                TempData["ToastMessage"] = $"Arquivo '{fileName}' renomeado para '{newFileName}' com sucesso!";
+                TempData["ToastColor"] = "success";
             }
             catch (Exception ex)
             {
@@ -196,6 +249,52 @@ namespace BlobStorage.Controllers
             }
 
             return RedirectToAction("Index");
+        }
+
+
+        [HttpPost("edit-description")]
+        public async Task<IActionResult> EditDescription([FromForm] string fileName, [FromForm] string newDescription)
+        {
+            try
+            {
+                var blobContainerClient = _blobStorageClientFactory.CreateBlobContainerClient();
+                var blobClient = blobContainerClient.GetBlobClient(fileName);
+
+                if (!await blobClient.ExistsAsync())
+                {
+                    TempData["ToastMessage"] = $"Arquivo '{fileName}' não encontrado.";
+                    TempData["ToastColor"] = "danger";
+                    return RedirectToAction("Index");
+                }
+
+                newDescription = StringHelpers.RemoveNonAsciiCharacters(newDescription);
+
+                var metadata = await blobClient.GetPropertiesAsync();
+                metadata.Value.Metadata["Description"] = newDescription;
+
+                await blobClient.SetMetadataAsync(metadata.Value.Metadata);
+
+                TempData["ToastMessage"] = $"Descrição do arquivo '{fileName}' atualizada com sucesso!";
+                TempData["ToastColor"] = "success";
+            }
+            catch (Exception ex)
+            {
+                TempData["ToastMessage"] = $"Erro ao atualizar a descrição: {ex.Message}";
+                TempData["ToastColor"] = "danger";
+            }
+
+            return RedirectToAction("Index");
+        }
+
+
+        [HttpPost]
+        public IActionResult ToggleDisplayMode()
+        {
+            // Alterna o valor da variável
+            bool currentMode = (TempData["displayModeList"] as bool?) ?? true;
+            TempData["displayModeList"] = !currentMode;
+
+            return RedirectToAction("Index"); // Redireciona para a Home
         }
 
 

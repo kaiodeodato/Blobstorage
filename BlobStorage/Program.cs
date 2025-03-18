@@ -1,15 +1,12 @@
 using Azure.Storage.Blobs;
 using Microsoft.AspNetCore.Mvc.Versioning;
 using Microsoft.AspNetCore.Mvc;
+using BlobStorage.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllersWithViews().AddRazorRuntimeCompilation();
-builder.Services.AddSingleton(x =>
-{
-    var connectionString = builder.Configuration.GetConnectionString("AzureBlobStorage");
-    return new BlobServiceClient(connectionString);
-});
+builder.Services.AddSingleton<IBlobStorageClientFactory, BlobStorageClientFactory>();
 builder.Services.AddApiVersioning(options =>
 {
     options.ReportApiVersions = true;
@@ -18,19 +15,18 @@ builder.Services.AddApiVersioning(options =>
     options.ApiVersionReader = new UrlSegmentApiVersionReader();
 });
 
-
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
+app.UseRouting();
+app.UseAuthorization();
 
 app.UseRouting();
 
