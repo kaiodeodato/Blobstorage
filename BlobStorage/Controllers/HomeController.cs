@@ -14,40 +14,20 @@ namespace BlobStorage.Controllers
     {
         private readonly IBlobStorageClientFactory _blobStorageClientFactory;
         private readonly string _containerName;
+        private readonly IBlobService _blobService;
 
-
-        public HomeController(IBlobStorageClientFactory blobStorageClientFactory, IConfiguration configuration)
+        public HomeController(IBlobService blobService, IBlobStorageClientFactory blobStorageClientFactory, IConfiguration configuration)
         {
             _blobStorageClientFactory = blobStorageClientFactory;
             _containerName = configuration.GetConnectionString("ContainerName") ?? "defaultContainerName";
+
+            _blobService = blobService;
         }
 
         public async Task<IActionResult> Index()
         {
-            var blobContainerClient = _blobStorageClientFactory.CreateBlobContainerClient();
-            var blobItems = blobContainerClient.GetBlobsAsync();
-
-            var files = new List<BlobItemWithMetadata>();
-
-            await foreach (var blobItem in blobItems)
-            {
-                var blobClient = blobContainerClient.GetBlobClient(blobItem.Name);
-
-                var properties = await blobClient.GetPropertiesAsync();
-                var metadata = properties.Value.Metadata;
-
-                var description = metadata.ContainsKey("Description") ? metadata["Description"] : "Sem descrição";
-
-                var fileWithMetadata = new BlobItemWithMetadata
-                {
-                    Name = blobItem.Name,
-                    Description = description
-                };
-
-                files.Add(fileWithMetadata);
-            }
-
-            return View(files.AsEnumerable());
+            var files = await _blobService.ListFilesAsync();
+            return View(files);
         }
 
         [HttpPost("upload")]
@@ -56,81 +36,34 @@ namespace BlobStorage.Controllers
             if (file == null || file.Length == 0)
                 return BadRequest("invalid file.");
 
-            try
-            {
-                var blobContainerClient = _blobStorageClientFactory.CreateBlobContainerClient();
-                await blobContainerClient.CreateIfNotExistsAsync();
+            var result = await _blobService.UploadFileAsync(file, description);
 
-                var blobClient = blobContainerClient.GetBlobClient(file.FileName);
-                using var stream = file.OpenReadStream();
-                await blobClient.UploadAsync(stream, true);
+            TempData["ToastMessage"] = result ? "Upload Success" : "Upload Error";
+            TempData["ToastColor"] = result ? "success" : "danger";
 
-                var metadata = new Dictionary<string, string>
-                {
-                    { "Description", description }
-                };
-                await blobClient.SetMetadataAsync(metadata);
-
-                TempData["ToastMessage"] = "Upload Success";
-                TempData["ToastColor"] = "success";
-                return RedirectToAction("Index");
-            }
-            catch
-            {
-                TempData["ToastMessage"] = "Upload Error";
-                TempData["ToastColor"] = "danger";
-                return RedirectToAction("Index");
-            }
+            return RedirectToAction("Index");
         }
-
 
         [HttpGet("download/{fileName}")]
         public async Task<IActionResult> DownloadFile(string fileName)
         {
-            var blobContainerClient = _blobStorageClientFactory.CreateBlobContainerClient();
+            var file = await _blobService.DownloadFileAsync(fileName);
 
-            var blobClient = blobContainerClient.GetBlobClient(fileName);
-
-            if (!await blobClient.ExistsAsync())
+            if (file == null)
                 return NotFound("File not found");
 
-            var download = await blobClient.DownloadAsync();
-            return File(download.Value.Content, download.Value.ContentType, fileName);
+            return File(file.Content, file.ContentType, fileName);
         }
 
         [HttpPost("delete/{fileName}")]
         public async Task<IActionResult> DeleteFile(string fileName)
         {
-            try
-            {
-                var blobContainerClient = _blobStorageClientFactory.CreateBlobContainerClient();
+            var result = await _blobService.DeleteFileAsync(fileName);
 
+            TempData["ToastMessage"] = result ? $"Arquivo '{fileName}' excluído com sucesso!" : $"Arquivo '{fileName}' não encontrado.";
+            TempData["ToastColor"] = result ? "success" : "danger";
 
-                var blobClient = blobContainerClient.GetBlobClient(fileName);
-
-                Console.WriteLine($"Tentando deletar: {fileName}");
-
-                var response = await blobClient.DeleteIfExistsAsync();
-
-                if (response)
-                {
-                    TempData["ToastMessage"] = $"Arquivo '{fileName}' excluído com sucesso!";
-                    TempData["ToastColor"] = "success";
-                }
-                else
-                {
-                    TempData["ToastMessage"] = $"Arquivo '{fileName}' não encontrado.";
-                    TempData["ToastColor"] = "danger";
-                }
-
-                return RedirectToAction("Index");
-            }
-            catch (Exception ex)
-            {
-                TempData["ToastMessage"] = $"Erro ao excluir o arquivo: {ex.Message}";
-                TempData["ToastColor"] = "danger";
-                return RedirectToAction("Index");
-            }
+            return RedirectToAction("Index");
         }
 
         [HttpGet("generate-thumbnail/{fileName}")]
@@ -290,11 +223,10 @@ namespace BlobStorage.Controllers
         [HttpPost]
         public IActionResult ToggleDisplayMode()
         {
-            // Alterna o valor da variável
             bool currentMode = (TempData["displayModeList"] as bool?) ?? true;
             TempData["displayModeList"] = !currentMode;
 
-            return RedirectToAction("Index"); // Redireciona para a Home
+            return RedirectToAction("Index"); 
         }
 
 
