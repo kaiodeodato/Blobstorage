@@ -9,5 +9,10 @@ namespace BlobStorage.Services
         Task<bool> UploadFileAsync(IFormFile file, string description);
         Task<BlobDownloadInfo?> DownloadFileAsync(string fileName);
         Task<bool> DeleteFileAsync(string fileName);
+        Task<bool> EditBlobDescriptionAsync(string fileName, string newDescription);
+        Task<string> GenerateThumbnailAsync(string fileName);
+        Task<string> ShowImageAsync(string fileName);
+        Task<Models.OperationResult> RenameBlobAsync(string fileName, string newFileName);
+
     }
 }

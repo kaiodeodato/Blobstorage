@@ -69,50 +69,18 @@ namespace BlobStorage.Controllers
         [HttpGet("generate-thumbnail/{fileName}")]
         public async Task<IActionResult> GenerateThumbnail(string fileName)
         {
-            var blobContainerClient = _blobStorageClientFactory.CreateBlobContainerClient();
+            var result = await _blobService.GenerateThumbnailAsync(fileName);
 
-            var blobClient = blobContainerClient.GetBlobClient(fileName);
-
-            if (!await blobClient.ExistsAsync())
-            {
-                return NotFound("Arquivo não encontrado.");
-            }
-
-            var sasBuilder = new BlobSasBuilder
-            {
-                BlobContainerName = _containerName,
-                BlobName = fileName,
-                ExpiresOn = DateTimeOffset.UtcNow.AddHours(1)
-            };
-            sasBuilder.SetPermissions(BlobSasPermissions.Read);
-
-            var sasUri = blobClient.GenerateSasUri(sasBuilder);
-
-            return Redirect(sasUri.ToString());
+            return Redirect(result);
         }
 
 
         [HttpGet("show/{fileName}")]
         public async Task<IActionResult> ShowImage(string fileName)
         {
-            var blobContainerClient = _blobStorageClientFactory.CreateBlobContainerClient();
+            var result = await _blobService.GenerateThumbnailAsync(fileName);
 
-            var blobClient = blobContainerClient.GetBlobClient(fileName);
-
-            if (!await blobClient.ExistsAsync())
-                return NotFound("Imagem não encontrada.");
-
-            var sasBuilder = new BlobSasBuilder
-            {
-                BlobContainerName = _containerName,
-                BlobName = fileName,
-                ExpiresOn = DateTimeOffset.UtcNow.AddHours(1) 
-            };
-            sasBuilder.SetPermissions(BlobSasPermissions.Read);
-
-            var sasUri = blobClient.GenerateSasUri(sasBuilder);
-
-            return Content($"<html><body><img src='{sasUri}' style='max-height:100%;'/></body></html>", "text/html");
+            return Content($"<html><body><img src='{result}' style='max-height:100%;'/></body></html>", "text/html");
         }
 
         [HttpPost("edit")]
@@ -120,65 +88,16 @@ namespace BlobStorage.Controllers
         {
             try
             {
-                if (fileName.Equals(newFileName, StringComparison.OrdinalIgnoreCase))
-                {
-                    TempData["ToastMessage"] = "O nome do arquivo já é o mesmo.";
-                    TempData["ToastColor"] = "danger";
-                    return RedirectToAction("Index");
-                }
+                var result = await _blobService.RenameBlobAsync(fileName, newFileName);
 
-                var blobContainerClient = _blobStorageClientFactory.CreateBlobContainerClient();
+                TempData["ToastMessage"] = result.Message;
+                TempData["ToastColor"] = result.Success ? "success" : "danger";
 
-                // Verificar se já existe um arquivo com o novo nome
-                var blobExists = false;
-                await foreach (var blobItem in blobContainerClient.GetBlobsAsync())
-                {
-                    if (blobItem.Name.Equals(newFileName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        blobExists = true;
-                        break;
-                    }
-                }
-
-                if (blobExists)
-                {
-                    TempData["ToastMessage"] = $"Já existe um arquivo com o nome '{newFileName}'. Escolha outro nome.";
-                    TempData["ToastColor"] = "danger";
-                    return RedirectToAction("Index");
-                }
-
-                var sourceBlobClient = blobContainerClient.GetBlobClient(fileName);
-                var destinationBlobClient = blobContainerClient.GetBlobClient(newFileName);
-
-                if (!await sourceBlobClient.ExistsAsync())
-                {
-                    TempData["Message"] = $"Arquivo '{fileName}' não encontrado.";
-                    return RedirectToAction("Index");
-                }
-
-                await destinationBlobClient.StartCopyFromUriAsync(sourceBlobClient.Uri);
-
-                BlobProperties properties;
-                do
-                {
-                    await Task.Delay(500);
-                    properties = await destinationBlobClient.GetPropertiesAsync();
-                } while (properties.CopyStatus == CopyStatus.Pending);
-
-                if (properties.CopyStatus != CopyStatus.Success)
-                {
-                    TempData["Message"] = $"Erro ao copiar o arquivo '{fileName}'.";
-                    return RedirectToAction("Index");
-                }
-
-                await sourceBlobClient.DeleteIfExistsAsync();
-
-                TempData["ToastMessage"] = $"Arquivo '{fileName}' renomeado para '{newFileName}' com sucesso!";
-                TempData["ToastColor"] = "success";
             }
             catch (Exception ex)
             {
-                TempData["Message"] = $"Erro ao renomear o arquivo: {ex.Message}";
+                TempData["ToastMessage"] = $"Erro ao renomear o arquivo: {ex.Message}";
+                TempData["ToastColor"] = "danger";
             }
 
             return RedirectToAction("Index");
@@ -188,34 +107,17 @@ namespace BlobStorage.Controllers
         [HttpPost("edit-description")]
         public async Task<IActionResult> EditDescription([FromForm] string fileName, [FromForm] string newDescription)
         {
-            try
+            var success = await _blobService.EditBlobDescriptionAsync(fileName, newDescription);
+
+            if (!success)
             {
-                var blobContainerClient = _blobStorageClientFactory.CreateBlobContainerClient();
-                var blobClient = blobContainerClient.GetBlobClient(fileName);
-
-                if (!await blobClient.ExistsAsync())
-                {
-                    TempData["ToastMessage"] = $"Arquivo '{fileName}' não encontrado.";
-                    TempData["ToastColor"] = "danger";
-                    return RedirectToAction("Index");
-                }
-
-                newDescription = StringHelpers.RemoveNonAsciiCharacters(newDescription);
-
-                var metadata = await blobClient.GetPropertiesAsync();
-                metadata.Value.Metadata["Description"] = newDescription;
-
-                await blobClient.SetMetadataAsync(metadata.Value.Metadata);
-
-                TempData["ToastMessage"] = $"Descrição do arquivo '{fileName}' atualizada com sucesso!";
-                TempData["ToastColor"] = "success";
-            }
-            catch (Exception ex)
-            {
-                TempData["ToastMessage"] = $"Erro ao atualizar a descrição: {ex.Message}";
+                TempData["ToastMessage"] = $"Arquivo '{fileName}' não encontrado ou erro ao atualizar.";
                 TempData["ToastColor"] = "danger";
+                return RedirectToAction("Index");
             }
 
+            TempData["ToastMessage"] = $"Descrição do arquivo '{fileName}' atualizada com sucesso!";
+            TempData["ToastColor"] = "success";
             return RedirectToAction("Index");
         }
 
