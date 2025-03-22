@@ -3,16 +3,24 @@
 
 // Write your JavaScript code.
 $(document).ready(function () {
-    // Exibe o toast
 
-    //$('#toast').toast('show');
     $('#toast').toast({
         delay: 2500
     }).toast('show');
 
-    // Fecha o toast quando o botão de fechar for clicado
     $('#toast .close').click(function () {
         $('#toast').toast('hide');
     });
 });
 
+const MAX_SIZE = 5 * 1024 * 1024;
+
+document.querySelector('form').addEventListener('submit', function (e) {
+    const fileInput = document.getElementById('fileInput');
+    const file = fileInput.files[0];
+
+    if (file && file.size > MAX_SIZE) {
+        alert('O arquivo é muito grande! O tamanho máximo permitido é 5MB.');
+        e.preventDefault();
+    }
+});

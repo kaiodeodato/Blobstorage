@@ -43,8 +43,11 @@ namespace BlobStorage.Repositories
         {
             var blobContainerClient = _blobStorageClientFactory.CreateBlobContainerClient();
             await blobContainerClient.CreateIfNotExistsAsync();
-
             var blobClient = blobContainerClient.GetBlobClient(file.FileName);
+
+            if (await blobClient.ExistsAsync())
+                throw new InvalidOperationException($"O arquivo '{file.FileName}' já existe.");
+
             using var stream = file.OpenReadStream();
             await blobClient.UploadAsync(stream, true);
 
@@ -144,6 +147,28 @@ namespace BlobStorage.Repositories
                 return false;
             }
         }
+
+        public async Task<IEnumerable<BlobItemWithMetadata>> SearchBlobsAsync(string fileName)
+        {
+            var blobContainerClient = _blobStorageClientFactory.CreateBlobContainerClient();
+            var blobs = new List<BlobItemWithMetadata>();
+
+            await foreach (var blobItem in blobContainerClient.GetBlobsAsync())
+            {
+                if (blobItem.Name.Contains(fileName, StringComparison.OrdinalIgnoreCase))
+                {
+                    var blobClient = blobContainerClient.GetBlobClient(blobItem.Name);
+                    var properties = await blobClient.GetPropertiesAsync();
+                    var metadata = properties.Value.Metadata;
+
+                    var description = metadata.ContainsKey("Description") ? metadata["Description"] : "Sem descrição";
+
+                    blobs.Add(new BlobItemWithMetadata { Name = blobItem.Name, Description = description });
+                }
+            }
+            return blobs;
+        }
+
 
     }
 }

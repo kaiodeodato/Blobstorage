@@ -14,5 +14,6 @@ namespace BlobStorage.Repositories
         Task SetBlobMetadataAsync(string fileName, IDictionary<string, string> metadata);
         Task<string> SetBlobSasPermition(string fileName);
         Task<bool> DuplicateAndDeleteBlobAsync(string fileName, string newFileName);
+        Task<IEnumerable<BlobItemWithMetadata>> SearchBlobsAsync(string fileName);
     }
 }

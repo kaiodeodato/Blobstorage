@@ -167,6 +167,18 @@ namespace BlobStorage.Services
             }
         }
 
+        public async Task<IEnumerable<BlobItemWithMetadata>> SearchFilesAsync(string fileName)
+        {
+            try
+            {
+                return await _blobRepository.SearchBlobsAsync(fileName) ?? new List<BlobItemWithMetadata>();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Erro ao buscar arquivos: {ex.Message}");
+                return new List<BlobItemWithMetadata>();
+            }
+        }
 
     }
 }

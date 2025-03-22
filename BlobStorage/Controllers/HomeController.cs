@@ -24,24 +24,66 @@ namespace BlobStorage.Controllers
             _blobService = blobService;
         }
 
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(string? fileName)
         {
-            var files = await _blobService.ListFilesAsync();
-            return View(files);
+            IEnumerable<BlobItemWithMetadata> files = new List<BlobItemWithMetadata>();
+
+            try
+            {
+                if (!string.IsNullOrEmpty(fileName))
+                {
+                    files = await _blobService.SearchFilesAsync(fileName) ?? new List<BlobItemWithMetadata>();
+                }
+                else
+                {
+                    files = await _blobService.ListFilesAsync() ?? new List<BlobItemWithMetadata>();
+                }
+            }
+            catch (Exception ex)
+            {
+                TempData["ToastMessage"] = "Erro ao buscar arquivos. Tente novamente mais tarde.";
+                TempData["ToastColor"] = "danger";
+                Console.WriteLine($"Erro ao buscar arquivos: {ex.Message}");
+            }
+
+            return View(files); 
         }
 
         [HttpPost("upload")]
-        public async Task<IActionResult> UploadFile([FromForm] IFormFile file, [FromForm] string description)
+        public async Task<IActionResult> UploadFile([FromForm] IFormFile? file, [FromForm] string? description)
         {
-            if (file == null || file.Length == 0)
-                return BadRequest("invalid file.");
+            const long MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB em bytes
 
-            var result = await _blobService.UploadFileAsync(file, description);
+            string message;
+            string color;
 
-            TempData["ToastMessage"] = result ? "Upload Success" : "Upload Error";
-            TempData["ToastColor"] = result ? "success" : "danger";
+            if(file == null || file.Length == 0)
+            {
+                message = "Por favor, selecione um arquivo para fazer upload.";
+                color = "warning";
+            }
+            else if (file.Length > MAX_FILE_SIZE)
+            {
+                message = "O arquivo é muito grande! O tamanho máximo permitido é 5MB.";
+                color = "warning";
+            }
+            else if (string.IsNullOrEmpty(description)) 
+            {
+                message = "Por favor, insira uma descrição para o arquivo.";
+                color = "warning";
+            } 
+            else
+            {
+                var result = await _blobService.UploadFileAsync(file, description);
+                message = result ? "Upload realizado com sucesso!" : "Erro ao realizar o upload.";
+                color = result ? "success" : "danger";
+            }
+
+            TempData["ToastMessage"] = message;
+            TempData["ToastColor"] = color;
 
             return RedirectToAction("Index");
+
         }
 
         [HttpGet("download/{fileName}")]
@@ -130,6 +172,41 @@ namespace BlobStorage.Controllers
 
             return RedirectToAction("Index"); 
         }
+
+        [HttpGet("search")]
+        public async Task<IActionResult> Search(string? fileName)
+        {
+            if (string.IsNullOrWhiteSpace(fileName))
+            {
+                TempData["ToastMessage"] = "Por favor, insira um nome de arquivo para pesquisar.";
+                TempData["ToastColor"] = "warning";
+                return RedirectToAction("Index");
+            }
+
+            try
+            {
+                var files = await _blobService.SearchFilesAsync(fileName) ?? new List<BlobItemWithMetadata>();
+
+                if (!files.Any())
+                {
+                    TempData["ToastMessage"] = $"Nenhum arquivo encontrado para '{fileName}'.";
+                    TempData["ToastColor"] = "info";
+                    return RedirectToAction("Index");
+                }
+
+                return RedirectToAction("Index", new { fileName = fileName });
+            }
+            catch (Exception ex)
+            {
+                TempData["ToastMessage"] = "Erro ao buscar arquivos. Tente novamente mais tarde.";
+                TempData["ToastColor"] = "danger";
+                Console.WriteLine($"Erro ao buscar arquivos: {ex.Message}");
+                return RedirectToAction("Index");
+            }
+        }
+
+
+
 
 
     }
