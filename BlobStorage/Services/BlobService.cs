@@ -4,6 +4,9 @@ using BlobStorage.Models;
 using BlobStorage.Repositories;
 using Microsoft.AspNetCore.Mvc;
 using System.ClientModel.Primitives;
+using static BlobStorage.Services.BlobService;
+using System.Drawing.Imaging;
+using System.Drawing;
 
 namespace BlobStorage.Services
 {
@@ -180,5 +183,22 @@ namespace BlobStorage.Services
             }
         }
 
+        public async Task<bool> IsValidImageFile(IFormFile file)
+        {
+            try
+            {
+                using (var stream = file.OpenReadStream())
+                {
+                    using (var image = Image.FromStream(stream))
+                    {
+                        return image.RawFormat.Equals(ImageFormat.Jpeg) || image.RawFormat.Equals(ImageFormat.Png);
+                    }
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
     }
 }

@@ -14,6 +14,7 @@ namespace BlobStorage.Services
         Task<string> ShowImageAsync(string fileName);
         Task<Models.OperationResult> RenameBlobAsync(string fileName, string newFileName);
         Task<IEnumerable<BlobItemWithMetadata>> SearchFilesAsync(string fileName);
+        Task<bool> IsValidImageFile(IFormFile file);
 
     }
 }

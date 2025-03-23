@@ -4,6 +4,7 @@ using Azure.Storage.Blobs.Models;
 using BlobStorage.Services;
 using BlobStorage.Models;
 using BlobStorage.Helpers;
+using System.Drawing;
 
 namespace BlobStorage.Controllers
 {
@@ -20,7 +21,6 @@ namespace BlobStorage.Controllers
         {
             _blobStorageClientFactory = blobStorageClientFactory;
             _containerName = configuration.GetConnectionString("ContainerName") ?? "defaultContainerName";
-
             _blobService = blobService;
         }
 
@@ -57,14 +57,25 @@ namespace BlobStorage.Controllers
             string message;
             string color;
 
-            if(file == null || file.Length == 0)
+            if (file == null || file.Length == 0)
             {
                 message = "Por favor, selecione um arquivo para fazer upload.";
                 color = "warning";
             }
+            else if (!(await _blobService.IsValidImageFile(file)))
+            {
+                message = "O arquivo não é uma imagem válida";
+                color = "danger";
+            }
             else if (file.Length > MAX_FILE_SIZE)
             {
                 message = "O arquivo é muito grande! O tamanho máximo permitido é 5MB.";
+                color = "warning";
+            }
+            else if (!file.FileName.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) &&
+            !file.FileName.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase))
+            {
+                message = "Somente arquivos JPEG ou JPG são permitidos.";
                 color = "warning";
             }
             else if (string.IsNullOrEmpty(description)) 
@@ -130,6 +141,13 @@ namespace BlobStorage.Controllers
         {
             try
             {
+                if (!newFileName.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) && !newFileName.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase))
+                {
+                    TempData["ToastMessage"] = "Somente arquivos JPEG ou JPG são permitidos.";
+                    TempData["ToastColor"] = "warning";
+                    return RedirectToAction("Index");
+                }
+
                 var result = await _blobService.RenameBlobAsync(fileName, newFileName);
 
                 TempData["ToastMessage"] = result.Message;

@@ -32,8 +32,9 @@ namespace BlobStorage.Repositories
                 var metadata = properties.Value.Metadata;
 
                 var description = metadata.ContainsKey("Description") ? metadata["Description"] : "Sem descrição";
+                var fileSize = properties.Value.ContentLength;
 
-                files.Add(new BlobItemWithMetadata { Name = blobItem.Name, Description = description });
+                files.Add(new BlobItemWithMetadata { Name = blobItem.Name, Description = description, FileSize = fileSize });
             }
 
             return files;
@@ -160,10 +161,10 @@ namespace BlobStorage.Repositories
                     var blobClient = blobContainerClient.GetBlobClient(blobItem.Name);
                     var properties = await blobClient.GetPropertiesAsync();
                     var metadata = properties.Value.Metadata;
-
+                    var fileSize = properties.Value.ContentLength;
                     var description = metadata.ContainsKey("Description") ? metadata["Description"] : "Sem descrição";
 
-                    blobs.Add(new BlobItemWithMetadata { Name = blobItem.Name, Description = description });
+                    blobs.Add(new BlobItemWithMetadata { Name = blobItem.Name, Description = description, FileSize = fileSize });
                 }
             }
             return blobs;
