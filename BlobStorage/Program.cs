@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc.Versioning;
 using Microsoft.AspNetCore.Mvc;
 using BlobStorage.Services;
 using BlobStorage.Repositories;
+using BlobStorage.Services.Decorators;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,7 +16,15 @@ builder.Services.AddApiVersioning(options =>
     options.DefaultApiVersion = new ApiVersion(1, 0);
     options.ApiVersionReader = new UrlSegmentApiVersionReader();
 });
-builder.Services.AddScoped<IBlobService, BlobService>();
+builder.Services.AddScoped<IBlobService>(provider =>
+{
+    var blobRepository = provider.GetRequiredService<IBlobRepository>();
+    var blobService = new BlobService(blobRepository);
+
+    var logger = provider.GetRequiredService<ILogger<BlobServiceLoggingDecorator>>();
+    return new BlobServiceLoggingDecorator(blobService, logger);
+});
+
 builder.Services.AddScoped<IBlobRepository, BlobRepository>();
 
 var app = builder.Build();
@@ -29,10 +38,6 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
-app.UseAuthorization();
-
-app.UseRouting();
-
 app.UseAuthorization();
 
 app.MapGet("/", () => Results.Redirect("/api/v1.0/Home/"));

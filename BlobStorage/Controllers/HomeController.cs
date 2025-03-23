@@ -13,14 +13,10 @@ namespace BlobStorage.Controllers
     [ApiVersion("1.0")]
     public class HomeController : Controller
     {
-        private readonly IBlobStorageClientFactory _blobStorageClientFactory;
-        private readonly string _containerName;
         private readonly IBlobService _blobService;
 
-        public HomeController(IBlobService blobService, IBlobStorageClientFactory blobStorageClientFactory, IConfiguration configuration)
+        public HomeController(IBlobService blobService)
         {
-            _blobStorageClientFactory = blobStorageClientFactory;
-            _containerName = configuration.GetConnectionString("ContainerName") ?? "defaultContainerName";
             _blobService = blobService;
         }
 
@@ -52,7 +48,7 @@ namespace BlobStorage.Controllers
         [HttpPost("upload")]
         public async Task<IActionResult> UploadFile([FromForm] IFormFile? file, [FromForm] string? description)
         {
-            const long MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB em bytes
+            const long MAX_FILE_SIZE = 20 * 1024 * 1024;
 
             string message;
             string color;
@@ -69,13 +65,16 @@ namespace BlobStorage.Controllers
             }
             else if (file.Length > MAX_FILE_SIZE)
             {
-                message = "O arquivo é muito grande! O tamanho máximo permitido é 5MB.";
+                message = "O arquivo é muito grande! O tamanho máximo permitido é 20MB.";
                 color = "warning";
             }
-            else if (!file.FileName.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) &&
-            !file.FileName.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase))
+            else if (!file.FileName.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) && 
+                !file.FileName.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) &&
+                !file.FileName.EndsWith(".png", StringComparison.OrdinalIgnoreCase) &&
+                !file.FileName.EndsWith(".gif", StringComparison.OrdinalIgnoreCase)
+                )
             {
-                message = "Somente arquivos JPEG ou JPG são permitidos.";
+                message = "Somente arquivos JPEG, JPG, PNG ou GIF são permitidos.";
                 color = "warning";
             }
             else if (string.IsNullOrEmpty(description)) 
@@ -94,7 +93,6 @@ namespace BlobStorage.Controllers
             TempData["ToastColor"] = color;
 
             return RedirectToAction("Index");
-
         }
 
         [HttpGet("download/{fileName}")]
@@ -141,9 +139,13 @@ namespace BlobStorage.Controllers
         {
             try
             {
-                if (!newFileName.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) && !newFileName.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase))
+                if (!newFileName.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) && 
+                    !newFileName.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) &&
+                    !newFileName.EndsWith(".png", StringComparison.OrdinalIgnoreCase) &&
+                    !newFileName.EndsWith(".gif", StringComparison.OrdinalIgnoreCase)
+                    )
                 {
-                    TempData["ToastMessage"] = "Somente arquivos JPEG ou JPG são permitidos.";
+                    TempData["ToastMessage"] = "Somente arquivos JPEG, JPG, PNG ou GIF são permitidos.";
                     TempData["ToastColor"] = "warning";
                     return RedirectToAction("Index");
                 }

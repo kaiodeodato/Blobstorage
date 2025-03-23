@@ -13,7 +13,7 @@ $(document).ready(function () {
     });
 });
 
-const MAX_SIZE = 5 * 1024 * 1024;
+const MAX_SIZE = 20 * 1024 * 1024;
 
 document.querySelector('form').addEventListener('submit', function (e) {
     const fileInput = document.getElementById('fileInput');
